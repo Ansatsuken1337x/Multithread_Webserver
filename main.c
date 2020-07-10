@@ -22,6 +22,7 @@ char * responses[] =
 {
 	"HTTP/1.0 200 OK\n",
 	"HTTP/1.0 404 Not Found\n",
+	"HTTP/1.0 400 Bad Request\n"
 };	
 
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -55,9 +56,8 @@ pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 int handle_request(char *mesg, int socked_fd)
 {
 	char *reqline[3], path[PATH_MAX];
-	int bytes_read = 0, temp = 0;
-	int fd;
-	
+	int bytes_read, bytes_write, temp, fd;
+
 	reqline[0] = malloc(sizeof(strlen(mesg)));
 	
 	// parser the mesg received
@@ -69,20 +69,23 @@ int handle_request(char *mesg, int socked_fd)
 	reqline[1] = strtok(NULL," ");
 	reqline[2] = strtok(NULL,EOL);
 	
-	
 	if ( strncmp( reqline[2], "HTTP/1.0", 8)!=0 && strncmp( reqline[2], "HTTP/1.1", 8)!=0 )
 	{
-		write(socked_fd, "HTTP/1.0 400 Bad Request\n", 25);
+		write(socked_fd, responses[2], strlen(responses[2]));
 		return -1;
 	}
 	
+	printf("reqline[0]	= %s \n",reqline[0]);
+	printf("reqline[1]	= %s \n",reqline[1]);
+	printf("reqline[2]	= %s \n",reqline[2]);
 	
 	//	GET METHOD
 	if(strcmp(reqline[0],"GET") == 0)
 	{		
 		if ( strncmp(reqline[1], "/\0", 2)==0 )
 			//Because if no file is specified, index.html will be opened by default
-			reqline[1] = "/cat.jpg";         
+			// reqline[1] = "/cat.jpg";         
+			strcpy(reqline[1],"/cat.jpg");
 	
 		strcpy(path, ROOT);
 		strcpy(&path[strlen(ROOT)], reqline[1]);
@@ -98,24 +101,24 @@ int handle_request(char *mesg, int socked_fd)
 			// rewind(fd);
 			
 			//	BEGIN OF CRITICAL SECTION
-			pthread_mutex_lock(&lock); 
+			// pthread_mutex_lock(&lock); 
 			
 			while ( (temp = read(fd, data_to_send, BUFFER_SIZE)) > 0 )
 			{
 				bytes_read += temp;
-				write(socked_fd, data_to_send, temp);
+				bytes_write = write(socked_fd, data_to_send, temp);
 			}
-			// printf("\nbytes_read = %d\n", bytes_read);
+			printf("\nbytes_read = %d", bytes_read);
+			printf("\nbytes_write = %d\n", bytes_write);
 			
-			pthread_mutex_unlock(&lock);
+			// pthread_mutex_unlock(&lock);
 			//	END OF CRITICAL SECTION
-			
-			return 22;
 		}
+		
 		else
 		{
 			write(socked_fd, responses[1], strlen(responses[1])); //FILE NOT FOUND
-			return 0;
+			return 400;
 		}
 	}
 	
@@ -127,10 +130,14 @@ int handle_request(char *mesg, int socked_fd)
 		printf("reqline[2]	= %s \n",reqline[2]);
 	}
 	
+	// shutdown(socked_fd, SHUT_RDWR);
+	close(socked_fd);
+			
+	return 200;
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-int respond(void *arg)
+void * respond(void *arg)
 {
 	// optimal initial BUFFER_SIZE = ???
 	char mesg[BUFFER_SIZE];
@@ -147,29 +154,28 @@ int respond(void *arg)
 	if (bytes_read < 0) // receive error
 	{
 		fprintf(stderr,"Error receiving data from client.\n");
-		return -1;
+		// return -1;
+		exit;
 	}
 	else if (bytes_read == 0) // socket closes
 	{
 		fprintf(stderr,"Client disconnected unexpectedly.\n");
-        return -1;
+        // return -1;
+		exit;
 	}
-	// msg received
+	// client header received here
 	
 	// handle request type properly
 	thread_ret = handle_request(mesg, socked_fd);
 	
-	shutdown (socked_fd, SHUT_RDWR);
-	close(socked_fd);
-	
-	return thread_ret;
+	// return thread_ret;
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char **argv)
 {
     pthread_t threads[MAX_CONNECTIONS];
-void * retvals[MAX_CONNECTIONS] = {NULL};
+	void * retvals[MAX_CONNECTIONS] = {NULL};
     struct sockaddr_in address;
     int server_fd, new_socket, PORT;
     int addrlen = sizeof(address);
@@ -216,34 +222,35 @@ void * retvals[MAX_CONNECTIONS] = {NULL};
             exit(1);
         }
         printf("Conexão estabelecida. \n");
+		// increments # total conns
+		j++;
+		i++;
 		
-		while(retvals[i % MAX_CONNECTIONS] != NULL)
-		{
-			i++;
-		}
-		
+		// Find a thread that's not busy
+		// while(retvals[i % MAX_CONNECTIONS] != NULL)
+		// {
+			// i++;
+			// printf("\MOONLIGHT\n");
+		// }
 	
         if (pthread_create(&threads[i], NULL, respond, &new_socket) != 0)
 		{
-			fprintf(stderr, "error: Cannot create thread # %d\n", i);
+			fprintf(stderr, "error: Cannot create thread # %d\n", j);
 			break;	
 		}
 	
 		if (pthread_join(threads[i], &retvals[i]) != 0)
         {
-			fprintf(stderr, "error: Cannot join thread # %d\n", i);
+			fprintf(stderr, "error: Cannot join thread # %d\n", j);
 			break;
         }	
 		else 
 		{
-			printf("Thread returns = %d @%p\n",retvals[i],retvals[i]);
-			retvals[i] = NULL;
+			// printf("Thread returns = %d @%p\n",retvals[i],retvals[i]);
+			// retvals[i] = NULL;
 		}
-		
-		j++;
     }
 
     return 0;
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////
-
