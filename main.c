@@ -20,15 +20,15 @@ char data_to_send[4096];
 
 char * responses[] = 
 {
-	"HTTP/1.0 200 OK\n",
+	"HTTP/1.1 200 OK\n\n",
 	"HTTP/1.0 404 Not Found\n",
-	"HTTP/1.0 400 Bad Request\n"
+	"HTTP/1.0 400 Bad Request\n",
 };	
 
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 // typedef struct {
- // char *ext;
+ // char *ext;
  // char *mediatype;
 // } extn;
 
@@ -83,35 +83,31 @@ int handle_request(char *mesg, int socked_fd)
 	if(strcmp(reqline[0],"GET") == 0)
 	{		
 		if ( strncmp(reqline[1], "/\0", 2)==0 )
-			//Because if no file is specified, index.html will be opened by default
-			// reqline[1] = "/cat.jpg";         
+			//Because if no file is specified, index.html will be opened by default   
+			// strcpy(reqline[1],"/index.html");
 			strcpy(reqline[1],"/cat.jpg");
 	
 		strcpy(path, ROOT);
 		strcpy(&path[strlen(ROOT)], reqline[1]);
-		// printf("file: %s\n", path);
+		printf("file: %s\n", path);
 	
 		if ( (fd=open(path, 0)) != -1 )	//FILE FOUND
 		{
 			send(socked_fd, responses[0], strlen(responses[0]), 0);
-			
-			// determines the file_size
-			// fseek(fd, 0L, SEEK_END);
-			// bytes_read = ftell(fd);
-			// rewind(fd);
-			
+
 			//	BEGIN OF CRITICAL SECTION
-			// pthread_mutex_lock(&lock); 
+			pthread_mutex_lock(&lock); 
 			
 			while ( (temp = read(fd, data_to_send, BUFFER_SIZE)) > 0 )
 			{
 				bytes_read += temp;
 				bytes_write = write(socked_fd, data_to_send, temp);
+				// printf("data_to_send = %s\n",data_to_send);
 			}
 			printf("\nbytes_read = %d", bytes_read);
 			printf("\nbytes_write = %d\n", bytes_write);
 			
-			// pthread_mutex_unlock(&lock);
+			pthread_mutex_unlock(&lock);
 			//	END OF CRITICAL SECTION
 		}
 		
@@ -130,7 +126,7 @@ int handle_request(char *mesg, int socked_fd)
 		printf("reqline[2]	= %s \n",reqline[2]);
 	}
 	
-	// shutdown(socked_fd, SHUT_RDWR);
+	shutdown(socked_fd, SHUT_RDWR);
 	close(socked_fd);
 			
 	return 200;
@@ -227,11 +223,11 @@ int main(int argc, char **argv)
 		i++;
 		
 		// Find a thread that's not busy
-		// while(retvals[i % MAX_CONNECTIONS] != NULL)
-		// {
-			// i++;
+		while(retvals[i % MAX_CONNECTIONS] != NULL)
+		{
+			i++;
 			// printf("\MOONLIGHT\n");
-		// }
+		}
 	
         if (pthread_create(&threads[i], NULL, respond, &new_socket) != 0)
 		{
@@ -239,7 +235,7 @@ int main(int argc, char **argv)
 			break;	
 		}
 	
-		if (pthread_join(threads[i], &retvals[i]) != 0)
+		if (pthread_join(threads[i], NULL) != 0)
         {
 			fprintf(stderr, "error: Cannot join thread # %d\n", j);
 			break;
@@ -247,7 +243,7 @@ int main(int argc, char **argv)
 		else 
 		{
 			// printf("Thread returns = %d @%p\n",retvals[i],retvals[i]);
-			// retvals[i] = NULL;
+			retvals[i] = NULL;
 		}
     }
 
