@@ -18,7 +18,7 @@ char *ROOT;
 int BUFFER_SIZE = 4096; // 4Kb = default page table size
 char data_to_send[4096];
 
-char * responses[] = 
+char *responses[] = 
 {
 	"HTTP/1.1 200 OK\n\n",
 	"HTTP/1.0 404 Not Found\n",
