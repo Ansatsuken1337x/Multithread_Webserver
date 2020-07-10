@@ -159,7 +159,6 @@ int respond(void *arg)
 	// handle request type properly
 	thread_ret = handle_request(mesg, socked_fd);
 	
-    // write(socked_fd, hello, strlen(hello));
 	shutdown (socked_fd, SHUT_RDWR);
 	close(socked_fd);
 	
@@ -170,7 +169,7 @@ int respond(void *arg)
 int main(int argc, char **argv)
 {
     pthread_t threads[MAX_CONNECTIONS];
-	void * retvals[MAX_CONNECTIONS] = {NULL};
+void * retvals[MAX_CONNECTIONS] = {NULL};
     struct sockaddr_in address;
     int server_fd, new_socket, PORT;
     int addrlen = sizeof(address);
