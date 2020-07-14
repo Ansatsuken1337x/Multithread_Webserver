@@ -223,10 +223,10 @@ int main(int argc, char **argv)
 		i++;
 		
 		// Find a thread that's not busy
+	    	// VOU USAR ISSO AQUI POSTERIORMENTE !!
 		while(retvals[i % MAX_CONNECTIONS] != NULL)
 		{
 			i++;
-			// printf("\MOONLIGHT\n");
 		}
 	
         if (pthread_create(&threads[i], NULL, respond, &new_socket) != 0)
