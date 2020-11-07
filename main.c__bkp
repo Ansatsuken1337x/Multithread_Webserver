@@ -14,10 +14,9 @@
 #define PATH_MAX 4096 
 
 // global 
-char ROOT[123123];
-char data_to_send[4096];
+char *ROOT;
 int BUFFER_SIZE = 4096; // 4Kb = default page table size
-int PORT = 666;
+char data_to_send[4096];
 
 char *responses[] = 
 {
@@ -70,7 +69,7 @@ int handle_request(char *mesg, int socked_fd)
 	reqline[1] = strtok(NULL," ");
 	reqline[2] = strtok(NULL,EOL);
 	
-	if (strncmp(reqline[2], "HTTP/1.0", 8)!=0 && strncmp(reqline[2], "HTTP/1.1", 8)!=0 )
+	if ( strncmp( reqline[2], "HTTP/1.0", 8)!=0 && strncmp( reqline[2], "HTTP/1.1", 8)!=0 )
 	{
 		write(socked_fd, responses[2], strlen(responses[2]));
 		return -1;
@@ -83,21 +82,15 @@ int handle_request(char *mesg, int socked_fd)
 	//	GET METHOD
 	if(strcmp(reqline[0],"GET") == 0)
 	{		
-
-
 		if ( strncmp(reqline[1], "/\0", 2)==0 )
 			//Because if no file is specified, index.html will be opened by default   
 			// strcpy(reqline[1],"/index.html");
 			strcpy(reqline[1],"/cat.jpg");
 	
-		printf("ROOT= %s \n",ROOT);
-
-		
 		strcpy(path, ROOT);
 		strcpy(&path[strlen(ROOT)], reqline[1]);
 		printf("file: %s\n", path);
 	
-		
 		if ( (fd=open(path, 0)) != -1 )	//FILE FOUND
 		{
 			send(socked_fd, responses[0], strlen(responses[0]), 0);
@@ -180,7 +173,7 @@ int main(int argc, char **argv)
     pthread_t threads[MAX_CONNECTIONS];
 	void * retvals[MAX_CONNECTIONS] = {NULL};
     struct sockaddr_in address;
-    int server_fd, new_socket;
+    int server_fd, new_socket, PORT;
     int addrlen = sizeof(address);
     int i = 0, j = 0;
 	
@@ -189,8 +182,7 @@ int main(int argc, char **argv)
 	PORT = 80;
 	
 	// ROOT to serve files
-	// ROOT = '/home/roner/Desktop/redes2020.1/Multithread_Webserver-master/';
-	strcpy(ROOT,"/home/roner/Desktop/redes2020.1/Multithread_Webserver-master");
+	ROOT = getenv("PWD");
     
     // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
