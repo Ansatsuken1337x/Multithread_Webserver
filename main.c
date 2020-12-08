@@ -32,7 +32,7 @@ pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 void getClientAddr(int sock_fd)
 {
-	char clientip[200];
+	char clientip[16];
 	struct sockaddr_in addr;
 	socklen_t addr_size = sizeof(struct sockaddr_in);
 	
@@ -45,12 +45,64 @@ void getClientAddr(int sock_fd)
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void read_whitelist(char *filename)
+{
+	FILE *fp  = NULL;
+	int **arrayIPs, arrayIPs2[10][6], *arrayIPs3[10];
+	char c;
+	int i,j;
+	
+	// Initially presumes total of 100's IP addresses, with 16 chars (ipv4 )
+	arrayIPs = (int **)malloc(10 * sizeof(int *));
+	for(i = 0; i < 10; i++)
+	{
+
+		arrayIPs[i] = malloc(16 * sizeof(int));
+		arrayIPs[i][0] = '7';
+	}
+
+	if((fp = fopen("whitelist.txt","r")) != NULL)
+	{
+		
+		i = 0; 
+		j = 0;
+		c = fgetc(fp);
+		while(c != EOF)
+		{
+			
+			if((c == '\n'))
+			{
+				
+				printf("%c",c);
+				c = fgetc(fp);
+				arrayIPs[i][j] = '\0';
+				i++;
+				j++;
+				continue;
+			}
+			
+			else
+			{
+				printf("%c",c);
+				arrayIPs[i][j] = c;
+				c = fgetc(fp);
+				j++;
+			}
+		}
+		
+		fclose(fp);
+	}
+
+	exit(0);
+}
+///////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void handle_request(char *client_request, int sock_fd)
 {
-	char *reqline[3], path[PATH_MAX], data_to_send[BUFFER_SIZE];
-	int bytes_read, bytes_write, temp, fd, c;
-	size_t content_length;
-	FILE *fp;
+	char *reqline[3], path[PATH_MAX], data_to_send[BUFFER_SIZE*10];
+	int bytes_read = 0, bytes_write = 0, temp, fd, c;
+	FILE *fp  = NULL;
 
 	reqline[0] = malloc(sizeof(strlen(client_request)));
 	reqline[1] = malloc(BUFFER_SIZE);
@@ -77,12 +129,11 @@ void handle_request(char *client_request, int sock_fd)
 		send(sock_fd, responses[2], strlen(responses[2]), 0);
 		return;
 	}
-	
-	
 	printf("reqline[0]	= %s \n",reqline[0]);
 	printf("reqline[1]	= %s \n",reqline[1]);
 	printf("reqline[2]	= %s \n",reqline[2]);
 	
+
 
 	/*	****************************** HANDLE HTTP METHODS ****************************** */
 	//	GET METHOD
@@ -100,22 +151,27 @@ void handle_request(char *client_request, int sock_fd)
 		printf("File Required = %s\n", path);
 	
 		
+		memset((void*)data_to_send, (int)'\0', strlen(data_to_send));
 		bytes_read = 0;
 		bytes_write = 0;
 		temp = 0;
-		if (fp = fopen(path, "r" ))	//FILE FOUND
+		fp = NULL;
+		if ((fp = fopen(path, "r" )) != NULL)	//FILE FOUND
 		{
 			fd = fileno(fp);
 
+			// bytes_read = 0;
+			// bytes_write = 0;
 			c = fgetc(fp);
 			while(c != EOF)
 			{
-				// data_to_send[bytes_read] = c;
-				bytes_read++;
+				data_to_send[bytes_read] = c;
 				c = fgetc(fp);
+				bytes_read += 1;
 			}
-			// data_to_send[bytes_read] = '\0';
 			rewind(fp);
+			fclose(fp);	
+
 
 			char str[4];
 			sprintf(str, "%d", bytes_read);
@@ -126,20 +182,18 @@ void handle_request(char *client_request, int sock_fd)
 			send(sock_fd, "\n", 1, 0);
 			// send(sock_fd, "Keep-Alive: max=3\n", strlen("Keep-Alive: max=3\n"), 0);
 			send(sock_fd, "Keep-Alive: timeout=3\n\n", strlen("Keep-Alive: timeout=3\n\n"), 0);
-			// send(sock_fd, "\n\n", 2, 0);
+			
 
-			
-			bytes_read = 0;
-			while ( (temp = read(fd, data_to_send, BUFFER_SIZE)) > 0 )
-			{
+			// bytes_read = 0;
+			// while ( (temp = read(fd, data_to_send, BUFFER_SIZE)) > 0 )
+			// {
 				
-				bytes_read += temp;
-				bytes_write += write(sock_fd, data_to_send, temp);
-			}
-			// bytes_write += write(sock_fd, data_to_send, bytes_read);
-			fclose(fp);	
+			// 	bytes_read += temp;
+			// 	bytes_write += write(sock_fd, data_to_send, temp);
+			// }
+			bytes_write = write(sock_fd, data_to_send, bytes_read);
 			
-		
+					
 			printf("bytes_read = %d\n", bytes_read);
 			printf("bytes_write = %d\n\n", bytes_write);
 		}
@@ -197,14 +251,12 @@ void * respond(void *arg)
 			fprintf(stderr,"Client disconnected unexpectedly.\n");
 			break;
 		}
-		bytes_read++;
 
 
-		// clients header already received here
 		// verifys '\r\n\r\n' sequence
-		// if(bytes_read == )
 		if(singleChar[0] == '\n' && clientRequest[i - 2] == '\n')
 		{						
+			// clients header already received here
 		
 			clientRequest[i] = singleChar[0];
 			printf("%c",clientRequest[i]);
@@ -216,7 +268,6 @@ void * respond(void *arg)
 			
 			// prepare to a new request header
 			memset((void*)clientRequest, (int)'\0', BUFFER_SIZE);
-			bytes_read = 0;
 			crlf_count = 0;
 			i = 0;
 			j = 0;
@@ -258,17 +309,21 @@ int main(int argc, char *argv[])
     socklen_t addrlen = sizeof(struct sockaddr_in);
     int server_fd, sock_fd;
     int i = 0;
-	// int *ptr[MAX_CONNECTIONS];
 
 	
 	// If port number is not specified, set default http port
 	PORT = ((argv[1] != (char *)' ') && (argc >= 2)) ? atoi(argv[1]) : PORT;
 
-	// ROOT to serve files
+	// Read whitelist, if provided
+	// if((argv[2] != (char *)' ') && (argc >= 3))
+		// read_whitelist(argv[2]);
+		// read_whitelist(NULL);
+
+
+	// set root to serve files
 	strcpy(ROOT,getenv("PWD"));
-    
+
     // Creating socket file descriptor
-    // if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
         perror("socket failed");
@@ -285,13 +340,7 @@ int main(int argc, char *argv[])
         perror("bind failed");
         exit(1);
     }
-	
-	// char content_length[BUFFER_SIZE];
-	// strcpy(content_length,"BANANA = ");
-	// int size = strlen(content_length);
-	// printf("\nPLANO = %s\n",content_length);
-	// // printf("\nPLANO = %s\n",strcat("Content-Length: ",(char *)itoa(strlen("adasdas"))));
-	// exit(0);
+
 
 	// run the server
     while (1)
@@ -309,27 +358,26 @@ int main(int argc, char *argv[])
 			perror("Cannot accept connection");
 			exit(1);
         }
-		// else
-		// {
-		// 	int enable = 1;
-		// 	if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
-    	// 		perror("setsockopt(SO_REUSEADDR) failed");
-		// }
-		
+
 	
 		// Get and prints client address 
         getClientAddr(sock_fd);
 
-		// SEQUENCIAL 
+		// SEQUENCIAL MODE
 		// respond(&sock_fd);
 
-		// MULTITHREAD
+		// MULTITHREAD MODE 
 		// Create thread and handle request
         if (pthread_create(&threads[i % MAX_CONNECTIONS], NULL, &respond, &sock_fd) != 0)
 		{
 			fprintf(stderr, "error: Cannot create thread # %d\n", i);
 			break;	
 		}
+		else
+		{
+			printf("\033[1;37mTHREAD [# %d] HAS SUCCESSFULLY FINISHED THEIR JOB. \033[0m \n\n",i);
+		}
+		
 
 		//	BEGIN OF CRITICAL SECTION
 		// pthread_mutex_lock(&lock); 
@@ -337,18 +385,6 @@ int main(int argc, char *argv[])
 		// pthread_mutex_unlock(&lock);
 		//	END OF CRITICAL SECTION
 	
-		// Wait thread finish their job
-		if (pthread_join(threads[i % MAX_CONNECTIONS], NULL) != 0)
-        {
-			fprintf(stderr, "error: Cannot join thread # %d\n", i);
-			break;
-        }	
-		else 
-		{	
-			
-			printf("\033[1;31mTHREAD [# %d] HAS SUCCESSFULLY FINISHED THEIR JOB. \033[0m \n\n",i);
-		}
-
 		// increments # total conns
 		i++;
     }
